@@ -1,0 +1,3 @@
+# Scripts de execução: finais de linha fixos por sistema.
+*.bat text eol=crlf
+*.command text eol=lf
