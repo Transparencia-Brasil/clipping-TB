@@ -15,15 +15,15 @@ COLUMN_MAPPING = {
     "Source Name": "Veículo",
     "Source": "Tipo de mídia",
     "Source Tier": "Tier",
-    "Área Temática": "Área Temática",
-    "Tema": "Tema",
-    "Projeto": "Projeto",
-    "Relatório": "Relatório",
-    "Confiança (auto)": "Confiança (auto)",
     "Views": "Visualizações",
     "Impressions": "Impressões",
     "Public Link": "Link",
 }
+
+# Colunas de classificação preenchidas pela TB (a fase 02 preenche
+# Área Temática, Tema e Confiança). A exportação da Palver não as traz;
+# quando ausentes, são criadas vazias.
+CLASSIFICATION_COLUMNS = ["Área Temática", "Tema", "Projeto", "Relatório", "Confiança (auto)"]
 
 # Ordem final das colunas no MODELO IDEAL.
 IDEAL_COLUMN_ORDER = [
@@ -69,6 +69,8 @@ def transform_palver_export(df: pd.DataFrame) -> pd.DataFrame:
 
     colunas_originais = list(COLUMN_MAPPING.keys())
     df_ideal = df[colunas_originais].rename(columns=COLUMN_MAPPING)
+    for coluna in CLASSIFICATION_COLUMNS:
+        df_ideal[coluna] = df[coluna] if coluna in df.columns else pd.NA
     df_ideal = df_ideal[IDEAL_COLUMN_ORDER]
 
     for coluna in NUMERIC_COLUMNS:

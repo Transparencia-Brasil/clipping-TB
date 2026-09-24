@@ -50,6 +50,20 @@ def test_transform_falha_quando_falta_coluna_obrigatoria():
         transform_palver_export(df)
 
 
+def test_transform_cria_colunas_de_classificacao_quando_ausentes():
+    colunas_tb = ["Área Temática", "Tema", "Projeto", "Relatório", "Confiança (auto)"]
+    df = pd.DataFrame([_linha_exemplo()]).drop(columns=colunas_tb)
+    resultado = transform_palver_export(df)
+    assert list(resultado.columns) == IDEAL_COLUMN_ORDER
+    assert resultado[colunas_tb].isna().all().all()
+
+
+def test_transform_preserva_colunas_de_classificacao_existentes():
+    df = pd.DataFrame([_linha_exemplo()])
+    resultado = transform_palver_export(df)
+    assert resultado.loc[0, "Área Temática"] == "Institucional"
+
+
 def test_validate_input_columns_aceita_colunas_extras():
     df = pd.DataFrame([_linha_exemplo(**{"Coluna Extra Da Palver": "qualquer valor"})])
     validate_input_columns(df)
