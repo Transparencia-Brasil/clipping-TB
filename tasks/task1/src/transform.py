@@ -1,35 +1,29 @@
 """
 Transforma a exportação bruta da Palver no MODELO IDEAL utilizado
-pela Transparência Brasil para geração de relatórios e classificação.
+pela Transparência Brasil para geração de relatórios.
 """
 
 import pandas as pd
 
 
-# Mapeamento das colunas da exportação original da Palver (em
-# português) para o nome final de cada coluna no MODELO IDEAL.
+# Mapeamento das colunas da exportação original da Palver para o
+# nome final de cada coluna no MODELO IDEAL.
 COLUMN_MAPPING = {
     "ID": "ID",
-    "Data": "Data",
-    "Título": "Título",
-    "Veículo": "Veículo",
-    "Fonte": "Tipo de mídia",
-    "Tier do Veículo": "Tier",
-    "Visualizações": "Visualizações",
-    "Impressões": "Impressões",
-    "Link Público": "Link",
+    "Date": "Data",
+    "Title": "Título",
+    "Source Name": "Veículo",
+    "Source": "Tipo de mídia",
+    "Source Tier": "Tier",
+    "Views": "Visualizações",
+    "Impressions": "Impressões",
+    "Public Link": "Link",
 }
 
-# Colunas que não existem na exportação bruta da Palver: são
-# preenchidas somente na Fase 2 (Classificação), então entram vazias
-# no MODELO IDEAL nesta etapa.
-COLUNAS_DE_CLASSIFICACAO = [
-    "Área Temática",
-    "Tema",
-    "Projeto",
-    "Relatório",
-    "Confiança (auto)",
-]
+# Colunas de classificação preenchidas pela TB (a fase 02 preenche
+# Área Temática, Tema e Confiança). A exportação da Palver não as traz;
+# quando ausentes, são criadas vazias.
+CLASSIFICATION_COLUMNS = ["Área Temática", "Tema", "Projeto", "Relatório", "Confiança (auto)"]
 
 # Ordem final das colunas no MODELO IDEAL.
 IDEAL_COLUMN_ORDER = [
@@ -68,20 +62,15 @@ def validate_input_columns(df: pd.DataFrame) -> None:
 def transform_palver_export(df: pd.DataFrame) -> pd.DataFrame:
     """
     Recebe o dataframe bruto exportado pela Palver (todas as colunas
-    originais, em português) e devolve o dataframe no MODELO IDEAL:
-    apenas as colunas relevantes, renomeadas, reordenadas e com os
-    tipos ajustados. As colunas de classificação (Área Temática, Tema,
-    Projeto, Relatório, Confiança) saem vazias, para serem preenchidas
-    na Fase 2.
+    originais) e devolve o dataframe no MODELO IDEAL: apenas as colunas
+    relevantes, renomeadas, reordenadas e com os tipos ajustados.
     """
     validate_input_columns(df)
 
     colunas_originais = list(COLUMN_MAPPING.keys())
     df_ideal = df[colunas_originais].rename(columns=COLUMN_MAPPING)
-
-    for coluna in COLUNAS_DE_CLASSIFICACAO:
-        df_ideal[coluna] = None
-
+    for coluna in CLASSIFICATION_COLUMNS:
+        df_ideal[coluna] = df[coluna] if coluna in df.columns else pd.NA
     df_ideal = df_ideal[IDEAL_COLUMN_ORDER]
 
     for coluna in NUMERIC_COLUMNS:
