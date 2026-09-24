@@ -21,6 +21,7 @@ from tasks.fase02.src.classifica import (
     classifica_df,
     cria_classificador,
     monta_prompt_sistema,
+    tem_conteudo,
 )
 from tasks.task1.src.transform import transform_palver_export
 
@@ -150,8 +151,9 @@ def mostra_fase02():
     st.write(
         "Envie o CSV no MODELO IDEAL (saída da Fase 1). Cada item com título "
         "é classificado em um Tema do esquema da Transparência Brasil pelo "
-        "modelo local; a Área Temática é derivada do Tema. Itens sem título "
-        "(em geral rádio e TV) não são enviados ao modelo."
+        "modelo local a partir do título e do conteúdo (texto ou transcrição); "
+        "a Área Temática é derivada do Tema. Itens sem título nem conteúdo "
+        "não são enviados ao modelo."
     )
 
     with st.expander("Configuração do modelo local"):
@@ -182,8 +184,13 @@ def mostra_fase02():
         st.error(f"Não foi possível ler o arquivo enviado: {erro}")
         return
 
-    com_titulo = df_ideal["Título"].fillna("").astype(str).str.strip().ne("").sum()
-    st.write(f"{len(df_ideal)} itens no arquivo, {com_titulo} com título para classificar.")
+    classificaveis = df_ideal.apply(tem_conteudo, axis=1).sum()
+    st.write(f"{len(df_ideal)} itens no arquivo, {classificaveis} com título ou conteúdo para classificar.")
+    if "Conteúdo" not in df_ideal.columns:
+        st.warning(
+            "O arquivo não tem a coluna Conteúdo; itens sem título (rádio e TV) "
+            "ficarão sem classificação. Gere o MODELO IDEAL novamente na Fase 1."
+        )
 
     if st.button("Classificar", type="primary", disabled=not modelo):
         esquema = carrega_esquema()

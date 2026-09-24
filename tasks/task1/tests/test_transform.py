@@ -20,6 +20,7 @@ def _linha_exemplo(**overrides):
         "Views": 120.5,
         "Impressions": 3000.0,
         "Public Link": "https://clip.palver.com.br/shared/news/abc123",
+        "Content": "Texto integral de exemplo",
     }
     linha.update(overrides)
     return linha
@@ -62,6 +63,49 @@ def test_transform_preserva_colunas_de_classificacao_existentes():
     df = pd.DataFrame([_linha_exemplo()])
     resultado = transform_palver_export(df)
     assert resultado.loc[0, "Área Temática"] == "Institucional"
+
+
+def _linha_exemplo_pt(**overrides):
+    linha = {
+        "ID": "abc123",
+        "Data": "2026-09-22",
+        "Título": "Título de exemplo",
+        "Veículo": "Veículo Exemplo",
+        "Fonte": "Notícias",
+        "Tier do Veículo": 4.0,
+        "Visualizações": None,
+        "Impressões": 0.0,
+        "Link Público": "https://clip.palver.com.br/shared/news/abc123",
+        "Conteúdo": "Texto integral de exemplo",
+    }
+    linha.update(overrides)
+    return linha
+
+
+def test_transform_aceita_exportacao_em_portugues():
+    df = pd.DataFrame([_linha_exemplo_pt()])
+    resultado = transform_palver_export(df)
+    assert list(resultado.columns) == IDEAL_COLUMN_ORDER
+    assert resultado.loc[0, "Tier"] == 4.0
+    assert resultado.loc[0, "Link"].startswith("https://clip.palver.com.br")
+
+
+def test_transform_preserva_conteudo_nos_dois_idiomas():
+    for linha in (_linha_exemplo(), _linha_exemplo_pt()):
+        resultado = transform_palver_export(pd.DataFrame([linha]))
+        assert resultado.loc[0, "Conteúdo"] == "Texto integral de exemplo"
+
+
+def test_transform_traduz_tipo_de_midia_da_exportacao_em_ingles():
+    df = pd.DataFrame([_linha_exemplo(Source="Radio"), _linha_exemplo(Source="News")])
+    resultado = transform_palver_export(df)
+    assert resultado["Tipo de mídia"].tolist() == ["Rádio", "Notícias"]
+
+
+def test_erro_lista_colunas_do_idioma_mais_proximo():
+    df = pd.DataFrame([_linha_exemplo_pt()]).drop(columns=["Tier do Veículo"])
+    with pytest.raises(ValueError, match=r"\['Tier do Veículo'\]"):
+        transform_palver_export(df)
 
 
 def test_validate_input_columns_aceita_colunas_extras():

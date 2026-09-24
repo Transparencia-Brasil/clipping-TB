@@ -35,6 +35,8 @@ NOMES_AREAS = {
 
 FORA_DO_ESCOPO = "Fora do escopo"
 NIVEIS_CONFIANCA = ["Alta", "Média", "Baixa"]
+LIMITE_CONTEUDO = 2000
+SEM_CONTEUDO = "Sem título nem conteúdo: não enviado ao modelo."
 
 REGRAS_DESEMPATE = """\
 - Qualquer menção a emendas parlamentares vai para "Emendas parlamentares", mesmo que envolva orçamento, STF ou Legislativo.
@@ -70,19 +72,29 @@ def monta_prompt_sistema(esquema: pd.DataFrame) -> str:
     )
 
 
+def _texto(linha: pd.Series, coluna: str) -> str:
+    """Valor textual da coluna, ou string vazia se ausente ou nulo."""
+    valor = linha.get(coluna)
+    return valor.strip() if isinstance(valor, str) else ""
+
+
 def monta_mensagem_item(linha: pd.Series) -> str:
     """Texto enviado ao modelo para um item do clipping."""
-    return (
-        f"Título: {linha['Título']}\n"
+    mensagem = (
+        f"Título: {_texto(linha, 'Título') or '(sem título)'}\n"
         f"Veículo: {linha['Veículo']}\n"
         f"Tipo de mídia: {linha['Tipo de mídia']}"
     )
+    conteudo = _texto(linha, "Conteúdo")
+    if conteudo:
+        # Corta textos longos para manter o modelo local rápido.
+        mensagem += f"\nConteúdo: {conteudo[:LIMITE_CONTEUDO]}"
+    return mensagem
 
 
 def tem_conteudo(linha: pd.Series) -> bool:
-    """Itens sem título (a maioria de rádio e TV) não têm o que classificar."""
-    titulo = linha["Título"]
-    return isinstance(titulo, str) and titulo.strip() != ""
+    """Só vai ao modelo o item com título ou conteúdo (transcrição, no caso de rádio e TV)."""
+    return bool(_texto(linha, "Título") or _texto(linha, "Conteúdo"))
 
 
 def schema_resposta(temas: list[str]) -> dict:
@@ -162,7 +174,7 @@ def classifica_df(
             ao_progredir(posicao, len(df))
 
         if not tem_conteudo(linha):
-            auditoria.append({"ID": linha["ID"], "Tema": None, "Justificativa": "Sem título: não enviado ao modelo."})
+            auditoria.append({"ID": linha["ID"], "Tema": None, "Justificativa": SEM_CONTEUDO})
             continue
 
         try:
@@ -201,8 +213,8 @@ def main() -> None:
     classificado.to_csv(args.saida, index=False, encoding="utf-8")
     auditoria.to_csv(args.saida.with_name(args.saida.stem + "_auditoria.csv"), index=False, encoding="utf-8")
 
-    sem_titulo = (auditoria["Justificativa"] == "Sem título: não enviado ao modelo.").sum()
-    print(f"{len(df)} itens | {classificado['Tema'].notna().sum()} classificados | {sem_titulo} sem título")
+    sem_conteudo = (auditoria["Justificativa"] == SEM_CONTEUDO).sum()
+    print(f"{len(df)} itens | {classificado['Tema'].notna().sum()} classificados | {sem_conteudo} sem título nem conteúdo")
     print(classificado["Área Temática"].value_counts(dropna=False).to_string())
 
 

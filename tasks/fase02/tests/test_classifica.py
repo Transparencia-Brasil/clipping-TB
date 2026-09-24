@@ -2,6 +2,8 @@ import pandas as pd
 
 from src.classifica import (
     FORA_DO_ESCOPO,
+    LIMITE_CONTEUDO,
+    SEM_CONTEUDO,
     carrega_esquema,
     classifica_df,
     monta_prompt_sistema,
@@ -24,6 +26,7 @@ def _linha_exemplo(**overrides):
         "Visualizações": None,
         "Impressões": 8982.0,
         "Link": "https://clip.palver.com.br/shared/news/abc123",
+        "Conteúdo": "O ministro Flávio Dino adiou o julgamento sobre as emendas parlamentares.",
     }
     linha.update(overrides)
     return linha
@@ -63,15 +66,39 @@ def test_area_e_derivada_do_tema():
     assert resultado.loc[0, "Confiança (auto)"] == "Alta"
 
 
-def test_item_sem_titulo_nao_vai_ao_modelo():
+def test_item_sem_titulo_nem_conteudo_nao_vai_ao_modelo():
     classificar, chamadas = _classificador_fixo(
         {"tema": "LAI", "confianca": "Alta", "justificativa": "x"}
     )
-    df = pd.DataFrame([_linha_exemplo(**{"Título": None, "Tipo de mídia": "Rádio"})])
+    df = pd.DataFrame([_linha_exemplo(**{"Título": None, "Conteúdo": None, "Tipo de mídia": "Rádio"})])
     resultado, auditoria = classifica_df(df, carrega_esquema(), classificar)
     assert chamadas == []
     assert pd.isna(resultado.loc[0, "Tema"])
-    assert len(auditoria) == 1
+    assert auditoria.loc[0, "Justificativa"] == SEM_CONTEUDO
+
+
+def test_item_sem_titulo_com_conteudo_vai_ao_modelo_com_texto_cortado():
+    classificar, chamadas = _classificador_fixo(
+        {"tema": "LAI", "confianca": "Média", "justificativa": "Fala de pedidos de acesso."}
+    )
+    transcricao = "pedido de acesso negado " * 500
+    df = pd.DataFrame([_linha_exemplo(**{"Título": None, "Conteúdo": transcricao, "Tipo de mídia": "Rádio"})])
+    resultado, _ = classifica_df(df, carrega_esquema(), classificar)
+    assert len(chamadas) == 1
+    assert "(sem título)" in chamadas[0]
+    assert "Conteúdo: pedido de acesso negado" in chamadas[0]
+    assert len(chamadas[0]) < LIMITE_CONTEUDO + 200
+    assert resultado.loc[0, "Tema"] == "LAI"
+
+
+def test_arquivo_antigo_sem_coluna_conteudo_ainda_funciona():
+    classificar, chamadas = _classificador_fixo(
+        {"tema": "Emendas parlamentares", "confianca": "Alta", "justificativa": "x"}
+    )
+    df = pd.DataFrame([_linha_exemplo()]).drop(columns=["Conteúdo"])
+    resultado, _ = classifica_df(df, carrega_esquema(), classificar)
+    assert "Conteúdo:" not in chamadas[0]
+    assert resultado.loc[0, "Tema"] == "Emendas parlamentares"
 
 
 def test_tema_inventado_pelo_modelo_e_descartado():
