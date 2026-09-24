@@ -8,6 +8,7 @@ Fase 2: recebe o MODELO IDEAL e classifica cada item por Tema e Área
 Temática usando o modelo local servido pela instância Docker do Ollama.
 """
 
+import base64
 import io
 import os
 
@@ -24,6 +25,60 @@ from tasks.fase02.src.classifica import (
 from tasks.task1.src.transform import transform_palver_export
 
 st.set_page_config(page_title="Clipping TB", layout="wide")
+
+COR_VERDE_AGUA = "#39b1bb"
+COR_LARANJA = "#f9a124"
+CAMINHO_LOGO_SVG = os.path.join(os.path.dirname(__file__), "assets", "logo.svg")
+CAMINHO_LOGO = os.path.join(os.path.dirname(__file__), "assets", "logo.png")
+
+
+def _logo_svg_inline():
+    """Lê o SVG da marca e devolve como HTML embutido, já com a cor
+    laranja da marca aplicada ao traço que usa currentColor."""
+    if not os.path.exists(CAMINHO_LOGO_SVG):
+        return None
+    with open(CAMINHO_LOGO_SVG, "r", encoding="utf-8") as arquivo_svg:
+        svg = arquivo_svg.read().strip()
+    svg = svg.replace(
+        "<svg ",
+        f'<svg style="height:44px;width:auto;vertical-align:middle;color:{COR_LARANJA};" ',
+        1,
+    )
+    return f'<span style="display:inline-flex;align-items:center;margin-right:1rem;">{svg}</span>'
+
+
+def _logo_em_base64():
+    """Lê o arquivo de logo do disco e devolve em base64, se ele existir."""
+    if not os.path.exists(CAMINHO_LOGO):
+        return None
+    with open(CAMINHO_LOGO, "rb") as arquivo_logo:
+        return base64.b64encode(arquivo_logo.read()).decode("utf-8")
+
+
+def mostra_cabecalho():
+    logo_svg_html = _logo_svg_inline()
+    if logo_svg_html:
+        logo_html = logo_svg_html
+    else:
+        logo_base64 = _logo_em_base64()
+        logo_html = (
+            f'<img src="data:image/png;base64,{logo_base64}" style="height:44px;margin-right:1rem;">'
+            if logo_base64
+            else ""
+        )
+
+    cabecalho_css = (
+        "<style>"
+        f".cabecalho-tb{{background-color:{COR_VERDE_AGUA};padding:1rem 1.5rem;"
+        "border-radius:8px;margin-bottom:1.5rem;display:flex;align-items:center;}"
+        ".cabecalho-tb h1{color:#ffffff;font-size:1.4rem;margin:0;}"
+        "</style>"
+    )
+    cabecalho_html = (
+        f'<div class="cabecalho-tb">{logo_html}'
+        "<h1>Clipping da Transparência Brasil</h1></div>"
+    )
+    st.markdown(cabecalho_css + cabecalho_html, unsafe_allow_html=True)
 
 
 def le_arquivo(arquivo) -> pd.DataFrame:
@@ -49,11 +104,11 @@ def lista_modelos(base_url: str) -> list[str]:
 
 
 def mostra_fase01():
-    st.title("Transformação do Clipping Palver em Modelo Ideal")
+    st.subheader("Transformação do Clipping Palver em Modelo Ideal")
     st.write(
         "Envie o arquivo exportado pela Palver (CSV ou XLSX) para gerar a "
         "versão no MODELO IDEAL, com colunas selecionadas, renomeadas e "
-        "formatadas."
+        "formatadas. A exportação pode estar em português ou em inglês."
     )
 
     arquivo = st.file_uploader(
@@ -91,7 +146,7 @@ def mostra_fase01():
 
 
 def mostra_fase02():
-    st.title("Classificação por Área Temática")
+    st.subheader("Classificação por Área Temática")
     st.write(
         "Envie o CSV no MODELO IDEAL (saída da Fase 1). Cada item com título "
         "é classificado em um Tema do esquema da Transparência Brasil pelo "
@@ -119,63 +174,68 @@ def mostra_fase02():
 
     if arquivo_ideal is None:
         st.info("Aguardando o envio do arquivo no MODELO IDEAL.")
-    else:
-        try:
-            df_ideal = le_arquivo(arquivo_ideal)
-        except Exception as erro:
-            st.error(f"Não foi possível ler o arquivo enviado: {erro}")
-            return
+        return
 
-        com_titulo = df_ideal["Título"].fillna("").astype(str).str.strip().ne("").sum()
-        st.write(f"{len(df_ideal)} itens no arquivo, {com_titulo} com título para classificar.")
+    try:
+        df_ideal = le_arquivo(arquivo_ideal)
+    except Exception as erro:
+        st.error(f"Não foi possível ler o arquivo enviado: {erro}")
+        return
 
-        if st.button("Classificar", type="primary", disabled=not modelo):
-            esquema = carrega_esquema()
-            classificar = cria_classificador(
-                monta_prompt_sistema(esquema), esquema["Tema"].tolist(), base_url, modelo
-            )
-            barra = st.progress(0.0)
+    com_titulo = df_ideal["Título"].fillna("").astype(str).str.strip().ne("").sum()
+    st.write(f"{len(df_ideal)} itens no arquivo, {com_titulo} com título para classificar.")
 
-            def ao_progredir(feitos, total):
-                barra.progress(feitos / total, text=f"Classificando item {feitos} de {total}")
+    if st.button("Classificar", type="primary", disabled=not modelo):
+        esquema = carrega_esquema()
+        classificar = cria_classificador(
+            monta_prompt_sistema(esquema), esquema["Tema"].tolist(), base_url, modelo
+        )
+        barra = st.progress(0.0)
 
-            classificado, auditoria = classifica_df(df_ideal, esquema, classificar, ao_progredir)
-            barra.empty()
-            # Guarda o resultado para que os downloads não disparem nova classificação.
-            st.session_state["resultado_fase02"] = (arquivo_ideal.name, classificado, auditoria)
+        def ao_progredir(feitos, total):
+            barra.progress(feitos / total, text=f"Classificando item {feitos} de {total}")
 
-        resultado = st.session_state.get("resultado_fase02")
-        if resultado is not None and resultado[0] == arquivo_ideal.name:
-            _, classificado, auditoria = resultado
-            st.success(f"{classificado['Tema'].notna().sum()} itens classificados.")
+        classificado, auditoria = classifica_df(df_ideal, esquema, classificar, ao_progredir)
+        barra.empty()
+        # Guarda o resultado para que os downloads não disparem nova classificação.
+        st.session_state["resultado_fase02"] = (arquivo_ideal.name, classificado, auditoria)
 
-            st.subheader("Itens por Área Temática")
-            st.dataframe(
-                classificado["Área Temática"].value_counts(dropna=False).rename_axis("Área Temática"),
-                use_container_width=True,
-            )
+    resultado = st.session_state.get("resultado_fase02")
+    if resultado is None or resultado[0] != arquivo_ideal.name:
+        return
 
-            st.subheader("Prévia da classificação")
-            previa = classificado.merge(auditoria[["ID", "Justificativa"]], on="ID", how="left")
-            st.dataframe(
-                previa[["Título", "Veículo", "Área Temática", "Tema", "Confiança (auto)", "Justificativa"]],
-                use_container_width=True,
-            )
+    _, classificado, auditoria = resultado
+    st.success(f"{classificado['Tema'].notna().sum()} itens classificados.")
 
-            coluna_1, coluna_2 = st.columns(2)
-            coluna_1.download_button(
-                label="Baixar CSV classificado",
-                data=para_csv(classificado),
-                file_name="classificado.csv",
-                mime="text/csv",
-            )
-            coluna_2.download_button(
-                label="Baixar auditoria (justificativas)",
-                data=para_csv(auditoria),
-                file_name="classificado_auditoria.csv",
-                mime="text/csv",
-            )
+    st.subheader("Itens por Área Temática")
+    st.dataframe(
+        classificado["Área Temática"].value_counts(dropna=False).rename_axis("Área Temática"),
+        use_container_width=True,
+    )
 
+    st.subheader("Prévia da classificação")
+    previa = classificado.merge(auditoria[["ID", "Justificativa"]], on="ID", how="left")
+    st.dataframe(
+        previa[["Título", "Veículo", "Área Temática", "Tema", "Confiança (auto)", "Justificativa"]],
+        use_container_width=True,
+    )
+
+    coluna_1, coluna_2 = st.columns(2)
+    coluna_1.download_button(
+        label="Baixar CSV classificado",
+        data=para_csv(classificado),
+        file_name="classificado.csv",
+        mime="text/csv",
+    )
+    coluna_2.download_button(
+        label="Baixar auditoria (justificativas)",
+        data=para_csv(auditoria),
+        file_name="classificado_auditoria.csv",
+        mime="text/csv",
+    )
+
+
+mostra_cabecalho()
 
 aba_fase01, aba_fase02 = st.tabs(["Fase 1 — Modelo Ideal", "Fase 2 — Classificação"])
 
