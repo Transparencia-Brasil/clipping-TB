@@ -14,7 +14,12 @@ import streamlit as st
 
 from tasks.Fase01.src.transform import transform_palver_export
 
-st.set_page_config(page_title="Clipping TB", layout="wide")
+st.set_page_config(
+    page_title="Clipping TB",
+    # Logo com o "T" já em laranja: um favicon não herda cor, então currentColor sairia preto.
+    page_icon=os.path.join(os.path.dirname(__file__), "assets", "favicon.svg"),
+    layout="wide",
+)
 
 # Paleta extraída de transparencia.org.br (as mesmas cores de .streamlit/config.toml).
 COR_VERDE_AGUA = "#39b1bb"
