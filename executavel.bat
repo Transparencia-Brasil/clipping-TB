@@ -17,12 +17,21 @@ if not exist ".venv\Scripts\activate.bat" (
 
 call .venv\Scripts\activate.bat
 
-rem Roda sempre: e rapido quando tudo ja esta instalado e corrige
-rem ambientes em que uma instalacao anterior falhou no meio.
-echo Verificando dependencias...
-python -m pip install -q --disable-pip-version-check -r setup\requirements.txt
-if errorlevel 1 goto erro
+rem So instala quando o requirements.txt mudou desde a ultima instalacao
+rem bem-sucedida. A copia so e gravada depois que o pip termina sem erro,
+rem entao uma instalacao interrompida e retomada na proxima execucao.
+fc /b setup\requirements.txt .venv\requirements.instalado >nul 2>nul
+if errorlevel 1 (
+    echo.
+    echo Instalando dependencias. Na primeira execucao isso pode levar 1 a 2 minutos...
+    echo.
+    python -m pip install --disable-pip-version-check -r setup\requirements.txt
+    if errorlevel 1 goto erro
+    copy /y setup\requirements.txt .venv\requirements.instalado >nul
+)
 
+echo.
+echo Abrindo o app no navegador. Para encerrar, feche esta janela.
 python -m streamlit run app.py
 if errorlevel 1 goto erro
 exit /b 0

@@ -20,3 +20,11 @@ greenTextColor = "#1f6f76"
 
 [client]
 toolbarMode = "minimal"
+
+# Sem isso, na primeira execução em um computador o Streamlit pede um
+# e-mail no terminal e não abre o app até a pessoa apertar Enter.
+[server]
+showEmailPrompt = false
+
+[browser]
+gatherUsageStats = false
