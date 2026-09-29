@@ -1,7 +1,30 @@
+# Paleta extraída de transparencia.org.br
 [theme]
 base = "light"
 primaryColor = "#f9a124"
 backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#e8f6f7"
-textColor = "#1a1a1a"
-font = "sans serif"
+secondaryBackgroundColor = "#f3fafb"
+textColor = "#3e3e3e"
+linkColor = "#2a8a92"
+borderColor = "#e3e3e3"
+baseRadius = "small"
+font = "'Open Sans':https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap"
+headingFont = "'Open Sans':https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap"
+# Avisos (st.info) e sucessos (st.success) nas cores da marca.
+blueColor = "#39b1bb"
+blueBackgroundColor = "#eaf6f7"
+blueTextColor = "#1f6f76"
+greenColor = "#39b1bb"
+greenBackgroundColor = "#eaf6f7"
+greenTextColor = "#1f6f76"
+
+[client]
+toolbarMode = "minimal"
+
+# Sem isso, na primeira execução em um computador o Streamlit pede um
+# e-mail no terminal e não abre o app até a pessoa apertar Enter.
+[server]
+showEmailPrompt = false
+
+[browser]
+gatherUsageStats = false
