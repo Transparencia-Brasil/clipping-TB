@@ -30,6 +30,21 @@ if errorlevel 1 (
     copy /y setup\requirements.txt .venv\requirements.instalado >nul
 )
 
+rem Na primeira execucao, cria um atalho na area de trabalho com a logo da TB.
+rem Se a pessoa apagar o atalho, ele e recriado na proxima execucao.
+set "PASTA_APP=%~dp0"
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$atalho = Join-Path ([Environment]::GetFolderPath('Desktop')) 'Clipping TB.lnk';" ^
+  "if (-not (Test-Path -LiteralPath $atalho)) {" ^
+  "  $s = (New-Object -ComObject WScript.Shell).CreateShortcut($atalho);" ^
+  "  $s.TargetPath = Join-Path $env:PASTA_APP 'executavel.bat';" ^
+  "  $s.WorkingDirectory = $env:PASTA_APP;" ^
+  "  $s.IconLocation = (Join-Path $env:PASTA_APP 'assets\logo_tb.ico') + ',0';" ^
+  "  $s.Description = 'Abre o app de clipping da Transparencia Brasil';" ^
+  "  $s.Save();" ^
+  "  Write-Host 'Atalho \"Clipping TB\" criado na area de trabalho.'" ^
+  "}" 2>nul
+
 echo.
 echo Abrindo o app no navegador. Para encerrar, feche esta janela.
 python -m streamlit run app.py

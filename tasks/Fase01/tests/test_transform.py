@@ -12,7 +12,7 @@ def _linha_exemplo(**overrides):
         "Source Name": "Veículo Exemplo",
         "Source": "News",
         "Source Tier": 3.0,
-        "Área Temática": "Institucional",
+        "Área Temática 1": "Institucional",
         "Tema": None,
         "Projeto": None,
         "Relatório": None,
@@ -52,7 +52,7 @@ def test_transform_falha_quando_falta_coluna_obrigatoria():
 
 
 def test_transform_cria_colunas_de_classificacao_quando_ausentes():
-    colunas_tb = ["Área Temática", "Tema", "Projeto", "Relatório", "Confiança (auto)"]
+    colunas_tb = ["Área Temática 1", "Tema", "Projeto", "Relatório", "Confiança (auto)"]
     df = pd.DataFrame([_linha_exemplo()]).drop(columns=colunas_tb)
     resultado = transform_palver_export(df)
     assert list(resultado.columns) == IDEAL_COLUMN_ORDER
@@ -62,7 +62,7 @@ def test_transform_cria_colunas_de_classificacao_quando_ausentes():
 def test_transform_preserva_colunas_de_classificacao_existentes():
     df = pd.DataFrame([_linha_exemplo()])
     resultado = transform_palver_export(df)
-    assert resultado.loc[0, "Área Temática"] == "Institucional"
+    assert resultado.loc[0, "Área Temática 1"] == "Institucional"
 
 
 def _linha_exemplo_pt(**overrides):

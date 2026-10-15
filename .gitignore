@@ -50,4 +50,4 @@ venv/
 *.csv
 *.xlsx
 !exemplo_exportacao_palver.csv
-!data/categorias/esquema_categorias.csv
+!data/categorias/catalogo_relatorios.csv

@@ -19,10 +19,10 @@ import streamlit as st
 
 from tasks.Fase01.src.transform import transform_palver_export
 from tasks.fase02.src.classifica import (
-    carrega_esquema,
+    NUM_CTX_PADRAO,
+    carrega_guia,
     classifica_df,
-    cria_classificador,
-    monta_prompt_sistema,
+    cria_classificadores,
     tem_conteudo,
 )
 
@@ -79,21 +79,31 @@ def le_arquivo(arquivo) -> pd.DataFrame:
     return pd.read_excel(arquivo)
 
 
-def para_csv(df: pd.DataFrame) -> str:
-    csv_buffer = io.StringIO()
-    df.to_csv(csv_buffer, index=False)
-    return csv_buffer.getvalue()
+FORMATOS_DOWNLOAD = ["Excel (.xlsx)", "CSV"]
 
 
-def lista_modelos(base_url: str) -> list[str]:
-    """Modelos disponíveis na instância; lista vazia se ela não responder."""
+def gera_arquivo(df: pd.DataFrame, formato: str, nome_planilha: str) -> tuple[bytes, str, str]:
+    """Devolve (conteúdo, extensão, mime) do dataframe no formato escolhido para download."""
+    if formato == "CSV":
+        # utf-8-sig para o Excel abrir o CSV com os acentos corretos.
+        return df.to_csv(index=False).encode("utf-8-sig"), "csv", "text/csv"
+    xlsx_buffer = io.BytesIO()
+    df.to_excel(xlsx_buffer, index=False, sheet_name=nome_planilha)
+    return (
+        xlsx_buffer.getvalue(),
+        "xlsx",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+def lista_modelos(base_url: str) -> list[str] | None:
+    """Modelos carregados no Ollama; None se ele não responder."""
     try:
-        resposta = requests.get(base_url.rstrip("/") + "/models", timeout=5)
+        resposta = requests.get(base_url.rstrip("/") + "/api/tags", timeout=5)
         resposta.raise_for_status()
-        # Sem modelos carregados, o Ollama devolve "data": null.
-        return [modelo["id"] for modelo in resposta.json().get("data") or []]
+        return [modelo["name"] for modelo in resposta.json().get("models") or []]
     except (requests.RequestException, KeyError, ValueError):
-        return []
+        return None
 
 
 logo_svg_html = _logo_svg_inline()
@@ -303,17 +313,8 @@ def mostra_fase01():
             },
         )
 
-        formato = st.radio("Formato do arquivo", ["Excel (.xlsx)", "CSV"], horizontal=True)
-
-        if formato == "CSV":
-            # utf-8-sig para o Excel abrir o CSV com os acentos corretos.
-            dados = df_ideal.to_csv(index=False).encode("utf-8-sig")
-            extensao, mime = "csv", "text/csv"
-        else:
-            xlsx_buffer = io.BytesIO()
-            df_ideal.to_excel(xlsx_buffer, index=False, sheet_name="Modelo Ideal")
-            dados = xlsx_buffer.getvalue()
-            extensao, mime = "xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        formato = st.radio("Formato do arquivo", FORMATOS_DOWNLOAD, horizontal=True, key="formato_fase01")
+        dados, extensao, mime = gera_arquivo(df_ideal, formato, "Modelo Ideal")
 
         # O período no nome evita confundir arquivos de meses diferentes.
         if pd.isna(data_inicio):
@@ -337,23 +338,32 @@ def mostra_fase01():
 def mostra_fase02():
     st.subheader("Classificação por Área Temática")
     st.write(
-        "Envie o CSV no MODELO IDEAL (saída da Fase 1). Cada item com título "
-        "é classificado em um Tema do esquema da Transparência Brasil pelo "
-        "modelo local a partir do título e do conteúdo (texto ou transcrição); "
-        "a Área Temática é derivada do Tema. Itens sem título nem conteúdo "
-        "não são enviados ao modelo."
+        "Envie o arquivo no MODELO IDEAL (saída da Fase 1). O modelo local classifica "
+        "cada item seguindo o guia de classificação da Transparência Brasil, a partir "
+        "do título e do conteúdo (texto ou transcrição), e preenche Área Temática 1, "
+        "Tema, Projeto e Relatório. Itens sem título nem conteúdo não são enviados ao modelo."
     )
 
     with st.expander("Configuração do modelo local"):
         base_url = st.text_input(
-            "Endereço da API",
-            value=os.environ.get("LLM_BASE_URL", "http://localhost:11434/v1"),
+            "Endereço do Ollama",
+            value=os.environ.get("LLM_BASE_URL", "http://localhost:11434"),
+        )
+        num_ctx = st.number_input(
+            "Janela de contexto (tokens)",
+            min_value=2048,
+            step=2048,
+            value=int(os.environ.get("LLM_NUM_CTX", NUM_CTX_PADRAO)),
+            help="Precisa caber o guia inteiro, cerca de 8 mil tokens, mais a notícia.",
         )
         modelos = lista_modelos(base_url)
         if modelos:
             modelo = st.selectbox("Modelo", modelos)
         else:
-            st.warning("A instância não respondeu. Confira se o container do Ollama está rodando.")
+            if modelos is None:
+                st.warning("O Ollama não respondeu. Confira se o container está rodando.")
+            else:
+                st.warning("O Ollama está no ar, mas sem nenhum modelo carregado.")
             modelo = st.text_input("Modelo", value=os.environ.get("LLM_MODEL", ""))
 
     arquivo_ideal = st.file_uploader(
@@ -381,16 +391,14 @@ def mostra_fase02():
         )
 
     if st.button("Classificar", type="primary", disabled=not modelo):
-        esquema = carrega_esquema()
-        classificar = cria_classificador(
-            monta_prompt_sistema(esquema), esquema["Tema"].tolist(), base_url, modelo
-        )
+        guia = carrega_guia()
+        classificadores = cria_classificadores(guia, base_url, modelo, int(num_ctx))
         barra = st.progress(0.0)
 
-        def ao_progredir(feitos, total):
-            barra.progress(feitos / total, text=f"Classificando item {feitos} de {total}")
+        def ao_progredir(etapa, feitos, total):
+            barra.progress(feitos / total, text=f"{etapa}: item {feitos} de {total}")
 
-        classificado, auditoria = classifica_df(df_ideal, esquema, classificar, ao_progredir)
+        classificado, auditoria = classifica_df(df_ideal, guia, classificadores, ao_progredir)
         barra.empty()
         # Guarda o resultado para que os downloads não disparem nova classificação.
         st.session_state["resultado_fase02"] = (arquivo_ideal.name, classificado, auditoria)
@@ -399,34 +407,41 @@ def mostra_fase02():
     if resultado is None or resultado[0] != arquivo_ideal.name:
         return
 
-    _, classificado, auditoria = resultado
-    st.success(f"{classificado['Tema'].notna().sum()} itens classificados.")
+    nome_enviado, classificado, auditoria = resultado
+    # O arquivo baixado mantém o nome do enviado, com a tag "_classificado" no fim.
+    nome_base = os.path.splitext(nome_enviado)[0] + "_classificado"
+    st.success(f"{classificado['Área Temática 1'].notna().sum()} itens classificados.")
 
-    st.subheader("Itens por Área Temática")
+    st.subheader("Itens por Área Temática 1")
     st.dataframe(
-        classificado["Área Temática"].value_counts(dropna=False).rename_axis("Área Temática"),
+        classificado["Área Temática 1"].value_counts(dropna=False).rename_axis("Área Temática 1"),
         width="stretch",
     )
 
     st.subheader("Prévia da classificação")
     previa = classificado.merge(auditoria[["ID", "Justificativa"]], on="ID", how="left")
     st.dataframe(
-        previa[["Título", "Veículo", "Área Temática", "Tema", "Confiança (auto)", "Justificativa"]],
+        previa[["Título", "Veículo", "Área Temática 1", "Tema", "Projeto", "Relatório", "Confiança (auto)", "Justificativa"]],
         width="stretch",
     )
 
+    formato = st.radio("Formato do arquivo", FORMATOS_DOWNLOAD, horizontal=True, key="formato_fase02")
+    dados_classificado, extensao, mime = gera_arquivo(classificado, formato, "Classificação")
+    dados_auditoria, _, _ = gera_arquivo(auditoria, formato, "Auditoria")
+
     coluna_1, coluna_2 = st.columns(2)
     coluna_1.download_button(
-        label="Baixar CSV classificado",
-        data=para_csv(classificado),
-        file_name="classificado.csv",
-        mime="text/csv",
+        label=f"Baixar classificação ({extensao.upper()})",
+        data=dados_classificado,
+        file_name=f"{nome_base}.{extensao}",
+        mime=mime,
+        type="primary",
     )
     coluna_2.download_button(
-        label="Baixar auditoria (justificativas)",
-        data=para_csv(auditoria),
-        file_name="classificado_auditoria.csv",
-        mime="text/csv",
+        label=f"Baixar auditoria ({extensao.upper()})",
+        data=dados_auditoria,
+        file_name=f"{nome_base}_auditoria.{extensao}",
+        mime=mime,
     )
 
 

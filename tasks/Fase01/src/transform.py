@@ -46,10 +46,10 @@ MEDIA_TYPE_PT = {
     "Press": "Impresso",
 }
 
-# Colunas de classificação preenchidas pela TB (a fase 02 preenche
-# Área Temática, Tema e Confiança). A exportação da Palver não as traz;
+# Colunas de classificação preenchidas pela TB (a fase 02 preenche todas,
+# seguindo o guia de classificação). A exportação da Palver não as traz;
 # quando ausentes, são criadas vazias.
-CLASSIFICATION_COLUMNS = ["Área Temática", "Tema", "Projeto", "Relatório", "Confiança (auto)"]
+CLASSIFICATION_COLUMNS = ["Área Temática 1", "Tema", "Projeto", "Relatório", "Confiança (auto)"]
 
 # Ordem final das colunas no MODELO IDEAL.
 IDEAL_COLUMN_ORDER = [
@@ -59,7 +59,7 @@ IDEAL_COLUMN_ORDER = [
     "Veículo",
     "Tipo de mídia",
     "Tier",
-    "Área Temática",
+    "Área Temática 1",
     "Tema",
     "Projeto",
     "Relatório",
